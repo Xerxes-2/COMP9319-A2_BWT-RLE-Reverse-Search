@@ -1,0 +1,45 @@
+#!/bin/bash
+#set -x #echo on
+
+echo "Testing begins ..."
+echo ""
+
+
+rm -f *.o bwtsearch *.out *.idx
+
+# COMPILE
+make
+
+# SEARCH
+if [ -f bwtsearch ] ; then
+    ./bwtsearch small1.rlb small1.idx "ban" > test1.out
+    ./bwtsearch small1.rlb small1.idx "an" > test2.out
+    ./bwtsearch small1.rlb small1.idx "and" > test3.out
+    ./bwtsearch small1.rlb small1.idx "in" > test4.out
+    ./bwtsearch small1.rlb small1.idx "ing" > test5.out
+    ./bwtsearch small2.rlb small2.idx "NY" > test6.out
+    ./bwtsearch small2.rlb small2.idx "Ship" > test7.out
+    ./bwtsearch small2.rlb small2.idx "Nov" > test8.out
+    ./bwtsearch small2.rlb small2.idx "an internal change" > test9.out
+    ./bwtsearch small2.rlb small2.idx "software" > test10.out
+    
+    for ((k=1;k<11;++k))
+    do
+	touch test$k.out
+	correct=`eval diff -q ans/ans$k.txt test$k.out`
+	if [ -z "$correct" ]; then
+	    echo "test$k: CORRECT"
+	else
+	    echo "test$k: FAILED"
+	fi
+    done
+
+    echo ""
+    echo "Testing - total 10 tests,"
+    echo "You can find out each test's query by 'cat ~cs9319/a2/autotest'"
+    echo ""
+
+else
+    echo "Failed to make bwtsearch."
+fi
+
