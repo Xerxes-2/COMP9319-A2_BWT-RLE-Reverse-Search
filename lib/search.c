@@ -130,7 +130,6 @@ unsigned int findId(int pos, int const *cTable, int const *position, FILE *rlb, 
     return idInt;
 }
 
-// Each cache item now also has a pointer to the next item in the list.
 struct cacheItem
 {
     char ch;
@@ -154,6 +153,7 @@ char rebuildCached(char ch, int *rank, int const *cTable, int const *position, F
     int startPos;
 
     struct cacheItem *item = cache[cp];
+    struct cacheItem *prev = NULL;
     while (item != NULL)
     {
         if (item->pos <= pos && item->pos + item->count > pos)
@@ -161,8 +161,24 @@ char rebuildCached(char ch, int *rank, int const *cTable, int const *position, F
             cacheHits++;
             // Found a match in the cache. Use the cached result.
             *rank = item->rank + pos - item->pos;
-            return item->ch;
+            char cha = item->ch;
+            if (item->count == 1)
+            {
+                // Remove the item from the cache.
+                if (prev == NULL)
+                {
+                    cache[cp] = item->next;
+                }
+                else
+                {
+                    prev->next = item->next;
+                }
+                free(item);
+                cacheSize--;
+            }
+            return cha;
         }
+        prev = item;
         item = item->next;
     }
     cacheMisses++;
@@ -190,18 +206,26 @@ char rebuildCached(char ch, int *rank, int const *cTable, int const *position, F
 void freeCache(int n)
 {
     int total = 0;
+    int deepest = 0;
     for (int i = 0; i < n; i++)
     {
+        int depth = 0;
         struct cacheItem *item = cache[i];
         while (item != NULL)
         {
             total++;
+            depth++;
             struct cacheItem *next = item->next;
             free(item);
             item = next;
         }
+        if (depth > deepest)
+        {
+            deepest = depth;
+        }
     }
     free(cache);
+    printf("Deepest cache: %d\n", deepest);
     printf("Cache hits: %d\n", cacheHits);
     printf("Cache misses: %d\n", cacheMisses);
     printf("Total cache items: %d\n", total);
