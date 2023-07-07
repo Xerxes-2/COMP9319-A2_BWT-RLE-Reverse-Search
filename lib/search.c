@@ -141,6 +141,7 @@ struct cacheItem
 
 static int cacheHits = 0;
 static int cacheMisses = 0;
+static int maxCacheSize = 0;
 
 char rebuildCached(char ch, int *rank, int const *cTable, int const *position, FILE *rlb, FILE *index,
                    int checkpointCount)
@@ -198,6 +199,10 @@ char rebuildCached(char ch, int *rank, int const *cTable, int const *position, F
         newItem->next = cache[cp];
         cache[cp] = newItem;
         cacheSize++;
+        if (cacheSize > maxCacheSize)
+        {
+            maxCacheSize = cacheSize;
+        }
     }
 
     return newCh;
@@ -229,6 +234,7 @@ void freeCache(int n)
     printf("Cache hits: %d\n", cacheHits);
     printf("Cache misses: %d\n", cacheMisses);
     printf("Total cache items: %d\n", total);
+    printf("Max cache size: %d\n", maxCacheSize);
 }
 
 void rebuildRec(char *record, int pos, int const *cTable, int const *position, FILE *rlb, FILE *index,
