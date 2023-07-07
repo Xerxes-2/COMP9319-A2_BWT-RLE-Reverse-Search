@@ -110,7 +110,7 @@ unsigned int findId(int pos, int const *cTable, int const *position, FILE *rlb, 
         {
             isId = 1;
         }
-        ch = rebuildCached(ch, &rank, cTable, position, rlb, index, checkpointCount, 0, !isId);
+        ch = rebuildCached(ch, &rank, cTable, position, rlb, index, checkpointCount);
         if (isId)
         {
             id[i++] = ch;
@@ -141,7 +141,7 @@ static int cacheHits = 0;
 static int cacheMisses = 0;
 
 char rebuildCached(char ch, int *rank, int const *cTable, int const *position, FILE *rlb, FILE *index,
-                   int checkpointCount, unsigned char readCache, unsigned char writeCache)
+                   int checkpointCount)
 {
     static int cacheSize = 0;
 
@@ -150,9 +150,6 @@ char rebuildCached(char ch, int *rank, int const *cTable, int const *position, F
     int count;
     int startPos;
 
-    // if (readCache)
-    // {
-    // Search for a matching item in the list at cache[hashValue].
     struct cacheItem *item = cache[cp];
     while (item != NULL)
     {
@@ -166,7 +163,6 @@ char rebuildCached(char ch, int *rank, int const *cTable, int const *position, F
         item = item->next;
     }
     cacheMisses++;
-    // }
 
     // No matching cache item found. Compute the result.
     char newCh = decode(pos, position, index, rlb, checkpointCount, rank, &count, &startPos);
@@ -218,7 +214,7 @@ void rebuildRec(char *record, int pos, int const *cTable, int const *position, F
     while (ch != ']' && i < MAX_RECORD_LENGTH)
     {
         record[i++] = ch;
-        ch = rebuildCached(ch, &rank, cTable, position, rlb, index, checkpointCount, 1, 0);
+        ch = rebuildCached(ch, &rank, cTable, position, rlb, index, checkpointCount);
     }
     record[i] = '\0';
     reverse(record);

@@ -11,5 +11,5 @@ void rebuildRec(char *record, int pos, int const *cTable, int const *position, F
                 int checkpointCount);
 unsigned int findId(int pos, int const *cTable, int const *position, FILE *rlb, FILE *index, int checkpointCount);
 char rebuildCached(char ch, int *rank, int const *cTable, int const *position, FILE *rlb, FILE *index,
-                   int checkpointCount, unsigned char readCache, unsigned char writeCache);
+                   int checkpointCount);
 void freeCache();
