@@ -321,20 +321,19 @@ int findIndex(int const arr[], int n, int key)
 static unsigned long callOcc = 0;
 static unsigned long callDecode = 0;
 
-int occ(char ch, int pos, int const *positions, FILE *index, FILE *rlb, int checkpointCount)
+int occFunc(char ch, int pos, int const *positions, FILE *index, FILE *rlb, int checkpointCount)
 {
     callOcc++;
     int nearest = findIndex(positions, checkpointCount, pos);
 
     int posBWT = positions[nearest];
     int posRLB = nearest * CHECKPOINT_LENGTH;
-    int occ = 0;
+    int occ[ALPHABET_SIZE] = {0};
     if (checkpointCount && nearest)
     {
-        fseek(index, (checkpointCount + map(ch) + QUICK_TABLE_LEN * 3) * sizeof(int) + (nearest - 1) * PIECE_LENGTH,
-              SEEK_SET);
-        unsigned long readN = fread(&occ, sizeof(int), 1, index);
-        if (readN != 1)
+        fseek(index, (checkpointCount + QUICK_TABLE_LEN * 3) * sizeof(int) + (nearest - 1) * PIECE_LENGTH, SEEK_SET);
+        unsigned long readN = fread(&occ, sizeof(int), ALPHABET_SIZE, index);
+        if (readN != ALPHABET_SIZE)
         {
             fprintf(stderr, "Failed to read occ from index file\n");
             exit(EXIT_FAILURE);
@@ -342,7 +341,7 @@ int occ(char ch, int pos, int const *positions, FILE *index, FILE *rlb, int chec
     }
     if (posBWT == pos)
     {
-        return occ;
+        return occ[map(ch)];
     }
     fseek(rlb, posRLB, SEEK_SET);
     unsigned char buffer[CHECKPOINT_LENGTH + 4];
@@ -374,10 +373,10 @@ int occ(char ch, int pos, int const *positions, FILE *index, FILE *rlb, int chec
         {
             if (posBWT + rlCount > pos)
             {
-                return occ + (pos - posBWT) * (rlChar == ch);
+                return occ[map(ch)] + (pos - posBWT) * (rlChar == ch);
             }
             posBWT += rlCount;
-            occ += rlCount * (rlChar == ch);
+            occ[map(rlChar)] += rlCount;
             rlChar = buffer[i];
             rlCount = 1;
             acc = 0;
@@ -385,15 +384,15 @@ int occ(char ch, int pos, int const *positions, FILE *index, FILE *rlb, int chec
     }
     if (pos == posBWT)
     {
-        return occ;
+        return occ[map(ch)];
     }
     if (acc)
     {
-        return occ + (pos - posBWT) * (rlChar == ch);
+        return occ[map(ch)] + (pos - posBWT) * (rlChar == ch);
     }
     else
     {
-        return occ + (rlChar == ch);
+        return occ[map(ch)] + (rlChar == ch);
     }
 }
 

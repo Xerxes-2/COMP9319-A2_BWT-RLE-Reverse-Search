@@ -26,6 +26,43 @@ int compareInt(const void *a, const void *b)
     return (*(const int *)a - *(const int *)b);
 }
 
+struct cacheItem
+{
+    char ch;
+    int rank;
+    int pos;
+    int count;
+    struct cacheItem *next;
+};
+
+static struct cacheItem **cache;
+
+static int cacheHits = 0;
+static int cacheMisses = 0;
+static int maxCacheSize = 0;
+static int cacheSize = 0;
+
+int occCached(char ch, int pos, int const *position, FILE *index, FILE *rlb, int checkpointCount)
+{
+    int cp = findIndex(position, checkpointCount, pos);
+    struct cacheItem *item = cache[cp];
+    while (item != NULL)
+    {
+        if (item->pos <= pos && item->pos + item->count > pos && item->ch == ch)
+        {
+            // Found a match in the cache. Use the cached result.
+            int occ = item->rank + pos - item->pos;
+            cacheHits++;
+            return occ;
+        }
+        item = item->next;
+    }
+    cacheMisses++;
+    int occ = occFunc(ch, pos, position, index, rlb, checkpointCount);
+
+    return occ;
+}
+
 int searchPattern(const char *pattern, const int *cTable, const int *position, FILE *rlb, FILE *index,
                   int checkpointCount, int *end)
 {
@@ -35,8 +72,8 @@ int searchPattern(const char *pattern, const int *cTable, const int *position, F
     int occEnd;
     for (int i = 1; i < strlen(pattern); i++)
     {
-        occStart = occ(pattern[i], indexStart, position, index, rlb, checkpointCount);
-        occEnd = occ(pattern[i], indexEnd, position, index, rlb, checkpointCount);
+        occStart = occCached(pattern[i], indexStart, position, index, rlb, checkpointCount);
+        occEnd = occCached(pattern[i], indexEnd, position, index, rlb, checkpointCount);
         indexStart = nthChar(occStart, pattern[i], cTable);
         indexEnd = nthChar(occEnd, pattern[i], cTable);
     }
@@ -47,15 +84,13 @@ int searchPattern(const char *pattern, const int *cTable, const int *position, F
     return indexStart;
 }
 
-static struct cacheItem **cache;
-
 void search(char const *pattern, int const *cTable, int const *position, FILE *rlb, FILE *index, int checkpointCount)
 {
     int indexEnd;
+    cache = calloc(checkpointCount + 1, sizeof(struct cacheItem **));
     int indexStart = searchPattern(pattern, cTable, position, rlb, index, checkpointCount, &indexEnd);
     unsigned int *idArr = (int *)malloc((indexEnd - indexStart) * sizeof(int));
     int j = 0;
-    cache = calloc(checkpointCount + 1, sizeof(struct cacheItem **));
     for (int i = indexStart; i < indexEnd; i++)
     {
         // To decode entire record, we need to find the next record, so plus 1
@@ -130,24 +165,9 @@ unsigned int findId(int pos, int const *cTable, int const *position, FILE *rlb, 
     return idInt;
 }
 
-struct cacheItem
-{
-    char ch;
-    int rank;
-    int pos;
-    int count;
-    struct cacheItem *next;
-};
-
-static int cacheHits = 0;
-static int cacheMisses = 0;
-static int maxCacheSize = 0;
-
 char rebuildCached(char ch, int *rank, int const *cTable, int const *position, FILE *rlb, FILE *index,
                    int checkpointCount)
 {
-    static int cacheSize = 0;
-
     int pos = nthChar(*rank, ch, cTable);
     int cp = findIndex(position, checkpointCount, pos);
     int count;
@@ -210,7 +230,6 @@ char rebuildCached(char ch, int *rank, int const *cTable, int const *position, F
 
 void freeCache(int n)
 {
-    int total = 0;
     int deepest = 0;
     for (int i = 0; i < n; i++)
     {
@@ -218,7 +237,6 @@ void freeCache(int n)
         struct cacheItem *item = cache[i];
         while (item != NULL)
         {
-            total++;
             depth++;
             struct cacheItem *next = item->next;
             free(item);
@@ -233,7 +251,6 @@ void freeCache(int n)
     printf("Deepest cache: %d\n", deepest);
     printf("Cache hits: %d\n", cacheHits);
     printf("Cache misses: %d\n", cacheMisses);
-    printf("Total cache items: %d\n", total);
     printf("Max cache size: %d\n", maxCacheSize);
 }
 
