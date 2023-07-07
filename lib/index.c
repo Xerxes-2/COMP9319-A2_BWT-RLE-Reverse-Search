@@ -318,8 +318,12 @@ int findIndex(int const arr[], int n, int key)
     return right; // return the last valid position
 }
 
+static unsigned long callOcc = 0;
+static unsigned long callDecode = 0;
+
 int occ(char ch, int pos, int const *positions, FILE *index, FILE *rlb, int checkpointCount)
 {
+    callOcc++;
     int nearest = findIndex(positions, checkpointCount, pos);
 
     int posBWT = positions[nearest];
@@ -420,6 +424,7 @@ int findRL(unsigned int const arr[], int key)
 char decode(int pos, int const *positions, FILE *index, FILE *rlb, int checkpointCount, int *rank, int *count,
             int *startPos)
 {
+    callDecode++;
     int nearest = findIndex(positions, checkpointCount, pos);
 
     int posBWT = positions[nearest];
@@ -542,4 +547,10 @@ char decode(int pos, int const *positions, FILE *index, FILE *rlb, int checkpoin
     *count = rlCount;
     *startPos = posBWT;
     return rlChar;
+}
+
+void summary()
+{
+    printf("Total call of occ: %lu\n", callOcc);
+    printf("Total call of decode: %lu\n", callDecode);
 }

@@ -47,12 +47,15 @@ int searchPattern(const char *pattern, const int *cTable, const int *position, F
     return indexStart;
 }
 
+static struct cacheItem **cache;
+
 void search(char const *pattern, int const *cTable, int const *position, FILE *rlb, FILE *index, int checkpointCount)
 {
     int indexEnd;
     int indexStart = searchPattern(pattern, cTable, position, rlb, index, checkpointCount, &indexEnd);
     unsigned int *idArr = (int *)malloc((indexEnd - indexStart) * sizeof(int));
     int j = 0;
+    cache = calloc(checkpointCount + 1, sizeof(struct cacheItem **));
     for (int i = indexStart; i < indexEnd; i++)
     {
         // To decode entire record, we need to find the next record, so plus 1
@@ -89,10 +92,11 @@ void search(char const *pattern, int const *cTable, int const *position, FILE *r
         printf("%s\n", record);
     }
 
-    freeCache();
+    freeCache(checkpointCount + 1);
     free(record);
     free(newPattern);
     free(idArr);
+    summary();
 }
 
 unsigned int findId(int pos, int const *cTable, int const *position, FILE *rlb, FILE *index, int checkpointCount)
@@ -136,7 +140,6 @@ struct cacheItem
     struct cacheItem *next;
 };
 
-static struct cacheItem *cache[HASH_SIZE] = {NULL};
 static int cacheHits = 0;
 static int cacheMisses = 0;
 
@@ -176,7 +179,6 @@ char rebuildCached(char ch, int *rank, int const *cTable, int const *position, F
         newItem->pos = startPos;
         newItem->count = count;
 
-        // Insert the new item at the beginning of the list at cache[hashValue].
         newItem->next = cache[cp];
         cache[cp] = newItem;
         cacheSize++;
@@ -185,14 +187,12 @@ char rebuildCached(char ch, int *rank, int const *cTable, int const *position, F
     return newCh;
 }
 
-void freeCache()
+void freeCache(int n)
 {
-    int hitCount = 0;
     int total = 0;
-    for (int i = 0; i < HASH_SIZE; i++)
+    for (int i = 0; i < n; i++)
     {
         struct cacheItem *item = cache[i];
-        hitCount += (item != NULL);
         while (item != NULL)
         {
             total++;
@@ -201,6 +201,10 @@ void freeCache()
             item = next;
         }
     }
+    free(cache);
+    printf("Cache hits: %d\n", cacheHits);
+    printf("Cache misses: %d\n", cacheMisses);
+    printf("Total cache items: %d\n", total);
 }
 
 void rebuildRec(char *record, int pos, int const *cTable, int const *position, FILE *rlb, FILE *index,

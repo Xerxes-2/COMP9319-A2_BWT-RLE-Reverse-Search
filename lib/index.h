@@ -12,3 +12,4 @@ int occ(char ch, int pos, int const *positions, FILE *index, FILE *rlb, int chec
 char decode(int pos, int const *positions, FILE *index, FILE *rlb, int checkpointCount, int *rank, int *count,
             int *startPos);
 int findIndex(int const arr[], int n, int key);
+void summary();

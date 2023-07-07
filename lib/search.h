@@ -1,4 +1,3 @@
-#define HASH_SIZE 200000
 #define CACHE_SIZE 500000
 #define MAX_MATCHES 10000
 #define MAX_PATTERN_LENGTH 512
@@ -12,4 +11,4 @@ void rebuildRec(char *record, int pos, int const *cTable, int const *position, F
 unsigned int findId(int pos, int const *cTable, int const *position, FILE *rlb, FILE *index, int checkpointCount);
 char rebuildCached(char ch, int *rank, int const *cTable, int const *position, FILE *rlb, FILE *index,
                    int checkpointCount);
-void freeCache();
+void freeCache(int n);
