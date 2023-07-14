@@ -321,18 +321,19 @@ int findIndex(int const arr[], int n, int key)
 static unsigned long callOcc = 0;
 static unsigned long callDecode = 0;
 
-int occFunc(char ch, int pos, int const *positions, FILE *index, FILE *rlb, int checkpointCount)
+int occFunc(char ch, int pos, Params const *params)
 {
     callOcc++;
-    int nearest = findIndex(positions, checkpointCount, pos);
+    int nearest = findIndex(params->positions, params->checkpointCount, pos);
 
-    int posBWT = positions[nearest];
+    int posBWT = params->positions[nearest];
     int posRLB = nearest * CHECKPOINT_LENGTH;
     int occ[ALPHABET_SIZE] = {0};
-    if (checkpointCount && nearest)
+    if (params->checkpointCount && nearest)
     {
-        fseek(index, (checkpointCount + QUICK_TABLE_LEN * 3) * sizeof(int) + (nearest - 1) * PIECE_LENGTH, SEEK_SET);
-        unsigned long readN = fread(&occ, sizeof(int), ALPHABET_SIZE, index);
+        fseek(params->index,
+              (params->checkpointCount + QUICK_TABLE_LEN * 3) * sizeof(int) + (nearest - 1) * PIECE_LENGTH, SEEK_SET);
+        unsigned long readN = fread(&occ, sizeof(int), ALPHABET_SIZE, params->index);
         if (readN != ALPHABET_SIZE)
         {
             fprintf(stderr, "Failed to read occ from index file\n");
@@ -343,9 +344,9 @@ int occFunc(char ch, int pos, int const *positions, FILE *index, FILE *rlb, int 
     {
         return occ[map(ch)];
     }
-    fseek(rlb, posRLB, SEEK_SET);
+    fseek(params->rlb, posRLB, SEEK_SET);
     unsigned char buffer[CHECKPOINT_LENGTH + 4];
-    short bytesRead = (short)fread(buffer, 1, CHECKPOINT_LENGTH + 4, rlb);
+    short bytesRead = (short)fread(buffer, 1, CHECKPOINT_LENGTH + 4, params->rlb);
     if (bytesRead <= 0)
     {
         fprintf(stderr, "Failed to read from rlb file\n");
@@ -420,20 +421,20 @@ int findRL(unsigned int const arr[], int key)
     return right; // return the last valid position
 }
 
-char decode(int pos, int const *positions, FILE *index, FILE *rlb, int checkpointCount, int *rank, int *count,
-            int *startPos)
+char decode(int pos, int *rank, int *count, int *startPos, Params const *params)
 {
     callDecode++;
-    int nearest = findIndex(positions, checkpointCount, pos);
+    int nearest = findIndex(params->positions, params->checkpointCount, pos);
 
-    int posBWT = positions[nearest];
+    int posBWT = params->positions[nearest];
     int posRLB = nearest * CHECKPOINT_LENGTH;
 
     struct checkpoint cp = {0};
-    if (nearest > 0 && nearest < checkpointCount)
+    if (nearest > 0 && nearest < params->checkpointCount)
     {
-        fseek(index, (checkpointCount + QUICK_TABLE_LEN * 3) * sizeof(int) + (nearest - 1) * PIECE_LENGTH, SEEK_SET);
-        unsigned long readN = fread(&cp, sizeof(int), ALPHABET_SIZE + QUICK_TABLE_LEN * 3, index);
+        fseek(params->index,
+              (params->checkpointCount + QUICK_TABLE_LEN * 3) * sizeof(int) + (nearest - 1) * PIECE_LENGTH, SEEK_SET);
+        unsigned long readN = fread(&cp, sizeof(int), ALPHABET_SIZE + QUICK_TABLE_LEN * 3, params->index);
         if (readN != ALPHABET_SIZE + QUICK_TABLE_LEN * 3)
         {
             fprintf(stderr, "Failed to read occ from index file\n");
@@ -453,22 +454,24 @@ char decode(int pos, int const *positions, FILE *index, FILE *rlb, int checkpoin
             }
         }
     }
-    else if (nearest == checkpointCount && checkpointCount)
+    else if (nearest == params->checkpointCount && nearest)
     {
-        fseek(index, (checkpointCount + QUICK_TABLE_LEN * 3) * sizeof(int) + (checkpointCount - 1) * PIECE_LENGTH,
+        fseek(params->index,
+              (params->checkpointCount + QUICK_TABLE_LEN * 3) * sizeof(int) +
+                  (params->checkpointCount - 1) * PIECE_LENGTH,
               SEEK_SET);
-        unsigned long readN = fread(&cp.occTable, sizeof(int), ALPHABET_SIZE, index);
+        unsigned long readN = fread(&cp.occTable, sizeof(int), ALPHABET_SIZE, params->index);
         if (readN != ALPHABET_SIZE)
         {
             fprintf(stderr, "Failed to read occ from index file\n");
             exit(EXIT_FAILURE);
         }
     }
-    else if (checkpointCount)
+    else if (params->checkpointCount)
     {
-        fseek(index, checkpointCount * sizeof(int), SEEK_SET);
+        fseek(params->index, params->checkpointCount * sizeof(int), SEEK_SET);
         unsigned int quickTable[QUICK_TABLE_LEN * 3];
-        unsigned long readN = fread(quickTable, sizeof(int), QUICK_TABLE_LEN * 3, index);
+        unsigned long readN = fread(quickTable, sizeof(int), QUICK_TABLE_LEN * 3, params->index);
         if (readN != QUICK_TABLE_LEN * 3)
         {
             fprintf(stderr, "Failed to read occ from index file\n");
@@ -489,10 +492,10 @@ char decode(int pos, int const *positions, FILE *index, FILE *rlb, int checkpoin
         }
     }
 
-    fseek(rlb, posRLB, SEEK_SET);
+    fseek(params->rlb, posRLB, SEEK_SET);
 
     unsigned char buffer[CHECKPOINT_LENGTH + 4];
-    short bytesRead = (short)fread(buffer, 1, CHECKPOINT_LENGTH + 4, rlb);
+    short bytesRead = (short)fread(buffer, 1, CHECKPOINT_LENGTH + 4, params->rlb);
     if (bytesRead <= 0)
     {
         fprintf(stderr, "Failed to read from rlb file\n");

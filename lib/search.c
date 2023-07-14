@@ -42,9 +42,9 @@ static int cacheMisses = 0;
 static int maxCacheSize = 0;
 static int cacheSize = 0;
 
-int occCached(char ch, int pos, int const *position, FILE *index, FILE *rlb, int checkpointCount)
+int occCached(char ch, int pos, Params const *params)
 {
-    int cp = findIndex(position, checkpointCount, pos);
+    int cp = findIndex(params->positions, params->checkpointCount, pos);
     struct cacheItem *item = cache[cp];
     while (item != NULL)
     {
@@ -58,43 +58,39 @@ int occCached(char ch, int pos, int const *position, FILE *index, FILE *rlb, int
         item = item->next;
     }
     cacheMisses++;
-    int occ = occFunc(ch, pos, position, index, rlb, checkpointCount);
+    int occ = occFunc(ch, pos, params);
 
     return occ;
 }
 
-int searchPattern(const char *pattern, const int *cTable, const int *position, FILE *rlb, FILE *index,
-                  int checkpointCount, int *end)
+int searchPattern(const char *pattern, int *end, Params const *params)
 {
-    int indexStart = cTable[map(pattern[0])];
-    int indexEnd = cTable[map(pattern[0]) + 1];
+    int indexStart = params->cTable[map(pattern[0])];
+    int indexEnd = params->cTable[map(pattern[0]) + 1];
     int occStart;
     int occEnd;
     for (int i = 1; i < strlen(pattern); i++)
     {
-        occStart = occCached(pattern[i], indexStart, position, index, rlb, checkpointCount);
-        occEnd = occCached(pattern[i], indexEnd, position, index, rlb, checkpointCount);
-        indexStart = nthChar(occStart, pattern[i], cTable);
-        indexEnd = nthChar(occEnd, pattern[i], cTable);
+        occStart = occCached(pattern[i], indexStart, params);
+        occEnd = occCached(pattern[i], indexEnd, params);
+        indexStart = nthChar(occStart, pattern[i], params->cTable);
+        indexEnd = nthChar(occEnd, pattern[i], params->cTable);
     }
-    if (end != NULL)
-    {
-        *end = indexEnd;
-    }
+    *end = indexEnd;
     return indexStart;
 }
 
-void search(char const *pattern, int const *cTable, int const *position, FILE *rlb, FILE *index, int checkpointCount)
+void search(char const *pattern, Params const *params)
 {
     int indexEnd;
-    cache = calloc(checkpointCount + 1, sizeof(struct cacheItem **));
-    int indexStart = searchPattern(pattern, cTable, position, rlb, index, checkpointCount, &indexEnd);
+    cache = calloc(params->checkpointCount + 1, sizeof(struct cacheItem **));
+    int indexStart = searchPattern(pattern, &indexEnd, params);
     unsigned int *idArr = (int *)malloc((indexEnd - indexStart) * sizeof(int));
     int j = 0;
     for (int i = indexStart; i < indexEnd; i++)
     {
         // To decode entire record, we need to find the next record, so plus 1
-        idArr[j++] = findId(i, cTable, position, rlb, index, checkpointCount) + 1;
+        idArr[j++] = findId(i, params) + 1;
     }
     qsort(idArr, j, sizeof(int), compareInt);
     char *newPattern = (char *)malloc(15);
@@ -111,30 +107,30 @@ void search(char const *pattern, int const *cTable, int const *position, FILE *r
         newPattern[0] = '[';
         sprintf(newPattern + 1, "%d]", idArr[i]);
         reverse(newPattern);
-        indexStart = searchPattern(newPattern, cTable, position, rlb, index, checkpointCount, &indexEnd);
+        indexStart = searchPattern(newPattern, &indexEnd, params);
         if (indexStart == indexEnd)
         {
             // must be end id + 1, so instead search for start id because all ids are consecutive
-            int numRec = cTable[map('[') + 1] - cTable[map('[')];
+            int numRec = params->cTable[map('[') + 1] - params->cTable[map('[')];
             unsigned int startId = idArr[i] - numRec;
             newPattern[0] = '[';
             sprintf(newPattern + 1, "%d]", startId);
             reverse(newPattern);
-            indexStart = searchPattern(newPattern, cTable, position, rlb, index, checkpointCount, &indexEnd);
+            indexStart = searchPattern(newPattern, &indexEnd, params);
         }
         sprintf(record, "[%d]", idArr[i] - 1);
-        rebuildRec(record + strlen(record), indexStart, cTable, position, rlb, index, checkpointCount);
+        rebuildRec(record + strlen(record), indexStart, params);
         printf("%s\n", record);
     }
 
-    freeCache(checkpointCount + 1);
+    freeCache(params->checkpointCount + 1);
     free(record);
     free(newPattern);
     free(idArr);
     summary();
 }
 
-unsigned int findId(int pos, int const *cTable, int const *position, FILE *rlb, FILE *index, int checkpointCount)
+unsigned int findId(int pos, Params const *params)
 {
     char *id = (char *)malloc(16);
     short i = 0;
@@ -142,14 +138,14 @@ unsigned int findId(int pos, int const *cTable, int const *position, FILE *rlb, 
     int isId = 0;
     int count;
     int startPos;
-    char ch = decode(pos, position, index, rlb, checkpointCount, &rank, &count, &startPos);
+    char ch = decode(pos, &rank, &count, &startPos, params);
     while (ch != '[' && i < MAX_RECORD_LENGTH)
     {
         if (ch == ']')
         {
             isId = 1;
         }
-        ch = rebuildCached(ch, &rank, cTable, position, rlb, index, checkpointCount);
+        ch = rebuildCached(ch, &rank, params);
         if (isId)
         {
             id[i++] = ch;
@@ -165,11 +161,10 @@ unsigned int findId(int pos, int const *cTable, int const *position, FILE *rlb, 
     return idInt;
 }
 
-char rebuildCached(char ch, int *rank, int const *cTable, int const *position, FILE *rlb, FILE *index,
-                   int checkpointCount)
+char rebuildCached(char ch, int *rank, Params const *params)
 {
-    int pos = nthChar(*rank, ch, cTable);
-    int cp = findIndex(position, checkpointCount, pos);
+    int pos = nthChar(*rank, ch, params->cTable);
+    int cp = findIndex(params->positions, params->checkpointCount, pos);
     int count;
     int startPos;
 
@@ -205,7 +200,7 @@ char rebuildCached(char ch, int *rank, int const *cTable, int const *position, F
     cacheMisses++;
 
     // No matching cache item found. Compute the result.
-    char newCh = decode(pos, position, index, rlb, checkpointCount, rank, &count, &startPos);
+    char newCh = decode(pos, rank, &count, &startPos, params);
 
     if (cacheSize < CACHE_SIZE)
     {
@@ -254,18 +249,17 @@ void freeCache(int n)
     printf("Max cache size: %d\n", maxCacheSize);
 }
 
-void rebuildRec(char *record, int pos, int const *cTable, int const *position, FILE *rlb, FILE *index,
-                int checkpointCount)
+void rebuildRec(char *record, int pos, Params const *params)
 {
     short i = 0;
     int rank;
     int count;
     int startPos;
-    char ch = decode(pos, position, index, rlb, checkpointCount, &rank, &count, &startPos);
+    char ch = decode(pos, &rank, &count, &startPos, params);
     while (ch != ']' && i < MAX_RECORD_LENGTH)
     {
         record[i++] = ch;
-        ch = rebuildCached(ch, &rank, cTable, position, rlb, index, checkpointCount);
+        ch = rebuildCached(ch, &rank, params);
     }
     record[i] = '\0';
     reverse(record);

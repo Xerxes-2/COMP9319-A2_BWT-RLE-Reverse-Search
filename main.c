@@ -89,7 +89,9 @@ int main(int argc, char *argv[])
 
     int *cTable = generateCTable(rlb, index, checkpointCount);
 
-    search(pattern, cTable, positions, rlb, index, checkpointCount);
+    Params params = {rlb, index, checkpointCount, cTable, positions};
+
+    search(pattern, &params);
 
     free(positions);
     free(cTable);

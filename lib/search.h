@@ -3,12 +3,11 @@
 #define MAX_PATTERN_LENGTH 512
 #define MAX_RECORD_LENGTH 5000
 #include <stdio.h>
+#include "index.h"
 
 char *reverse(char *str);
-void search(char const *pattern, int const *cTable, int const *position, FILE *rlb, FILE *index, int checkpointCount);
-void rebuildRec(char *record, int pos, int const *cTable, int const *position, FILE *rlb, FILE *index,
-                int checkpointCount);
-unsigned int findId(int pos, int const *cTable, int const *position, FILE *rlb, FILE *index, int checkpointCount);
-char rebuildCached(char ch, int *rank, int const *cTable, int const *position, FILE *rlb, FILE *index,
-                   int checkpointCount);
+void search(char const *pattern, Params const *params);
+void rebuildRec(char *record, int pos, Params const *params);
+unsigned int findId(int pos, Params const *params);
+char rebuildCached(char ch, int *rank, Params const *params);
 void freeCache(int n);
