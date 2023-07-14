@@ -421,6 +421,7 @@ int findRL(unsigned int const arr[], int key)
     return right; // return the last valid position
 }
 
+int foundInTops = 0;
 char decode(int pos, int *rank, int *count, int *startPos, Params const *params)
 {
     callDecode++;
@@ -450,6 +451,7 @@ char decode(int pos, int *rank, int *count, int *startPos, Params const *params)
                 *rank = cp.quickTable[rlIndex * 3 + 2] + (pos - decoded.pos);
                 *count = decoded.count;
                 *startPos = decoded.pos;
+                foundInTops++;
                 return decoded.ch;
             }
         }
@@ -487,6 +489,7 @@ char decode(int pos, int *rank, int *count, int *startPos, Params const *params)
                 *rank = cp.quickTable[rlIndex * 3 + 2] + (pos - decoded.pos);
                 *count = decoded.count;
                 *startPos = decoded.pos;
+                foundInTops++;
                 return decoded.ch;
             }
         }
@@ -555,4 +558,5 @@ void summary()
 {
     printf("Total call of occ: %lu\n", callOcc);
     printf("Total call of decode: %lu\n", callDecode);
+    printf("Found in tops: %d\n", foundInTops);
 }

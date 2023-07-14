@@ -52,17 +52,16 @@ int occCached(char ch, int pos, Params const *params)
         {
             // Found a match in the cache. Use the cached result.
             int occ = item->rank + pos - item->pos;
-            cacheHits++;
             return occ;
         }
         item = item->next;
     }
-    cacheMisses++;
     int occ = occFunc(ch, pos, params);
 
     return occ;
 }
 
+int startEndInSameBlock = 0;
 int searchPattern(const char *pattern, int *end, Params const *params)
 {
     int indexStart = params->cTable[map(pattern[0])];
@@ -71,6 +70,8 @@ int searchPattern(const char *pattern, int *end, Params const *params)
     int occEnd;
     for (int i = 1; i < strlen(pattern); i++)
     {
+        startEndInSameBlock += (findIndex(params->positions, params->checkpointCount, indexStart) ==
+                                findIndex(params->positions, params->checkpointCount, indexEnd));
         occStart = occCached(pattern[i], indexStart, params);
         occEnd = occCached(pattern[i], indexEnd, params);
         indexStart = nthChar(occStart, pattern[i], params->cTable);
@@ -247,6 +248,7 @@ void freeCache(int n)
     printf("Cache hits: %d\n", cacheHits);
     printf("Cache misses: %d\n", cacheMisses);
     printf("Max cache size: %d\n", maxCacheSize);
+    printf("Occ can be combined: %d\n", startEndInSameBlock);
 }
 
 void rebuildRec(char *record, int pos, Params const *params)
