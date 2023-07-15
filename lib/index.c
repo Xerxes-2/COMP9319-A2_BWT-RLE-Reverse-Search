@@ -1,5 +1,4 @@
 #include "index.h"
-#include <search.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -20,13 +19,13 @@ unsigned char map(char ch)
     }
 }
 
-unsigned int rebuildCount(unsigned int curCount, unsigned char newByte, unsigned char acc)
+unsigned int rebuildCount(unsigned int curCount, unsigned char newByte, unsigned char countLen)
 {
     unsigned int newByteCount = newByte & 0x7F;
-    return curCount + 2 * (acc == 0) + (newByteCount << (acc * 7));
+    return curCount + 2 * (countLen == 0) + (newByteCount << (countLen * 7));
 }
 
-struct runLength
+struct RunLength
 {
     unsigned char ch;
     unsigned int count;
@@ -36,20 +35,20 @@ struct runLength
 
 int compareRL(const void *a, const void *b)
 {
-    const struct runLength *elemA = (const struct runLength *)a;
-    const struct runLength *elemB = (const struct runLength *)b;
+    const struct RunLength *elemA = (const struct RunLength *)a;
+    const struct RunLength *elemB = (const struct RunLength *)b;
     return elemA->pos - elemB->pos; // reverse order to create a min-heap
 }
 
-unsigned long encodeRL(struct runLength const *rl)
+unsigned long encodeRL(struct RunLength const *rl)
 {
     // count and pos is at most 28 bit
     return ((unsigned long)rl->ch << 56) | ((unsigned long)rl->count << 28) | rl->pos;
 }
 
-struct runLength decodeRL(unsigned long rl)
+struct RunLength decodeRL(unsigned long rl)
 {
-    struct runLength decoded;
+    struct RunLength decoded;
     decoded.ch = rl >> 56;
     decoded.count = (rl >> 28) & 0xFFFFFFF;
     decoded.pos = rl & 0xFFFFFFF;
@@ -58,18 +57,18 @@ struct runLength decodeRL(unsigned long rl)
 
 struct PQueue
 {
-    struct runLength data[QUICK_TABLE_LEN];
+    struct RunLength data[QUICK_TABLE_LEN];
     int size;
 };
 
-void swap(struct runLength *x, struct runLength *y)
+void swap(struct RunLength *x, struct RunLength *y)
 {
-    struct runLength temp = *x;
+    struct RunLength temp = *x;
     *x = *y;
     *y = temp;
 }
 
-void insert(struct PQueue *pq, struct runLength rl)
+void insert(struct PQueue *pq, struct RunLength rl)
 {
     if (pq->size < QUICK_TABLE_LEN)
     {
@@ -122,17 +121,6 @@ void insert(struct PQueue *pq, struct runLength rl)
     }
 }
 
-struct runLength top(const struct PQueue *pq)
-{
-    if (pq->size == 0)
-    {
-        // The queue is empty. You should handle this error in your code.
-        struct runLength rl = {0, 0, 0, 0};
-        return rl;
-    }
-    return pq->data[0];
-}
-
 int *generateIndex(FILE *rlb, FILE *index, int checkpointCount)
 {
     if (checkpointCount == 0)
@@ -169,31 +157,31 @@ int *generateIndex(FILE *rlb, FILE *index, int checkpointCount)
 
         unsigned char rlChar = buffer[i];
         unsigned int rlCount = 1;
-        unsigned char acc = 0;
+        unsigned char countLen = 0;
         struct PQueue pq = {.size = 0};
         for (i++; i < CHECKPOINT_LENGTH; i++)
         {
             if (MSB(buffer[i]))
             {
-                rlCount = rebuildCount(rlCount, buffer[i], acc);
-                acc++;
+                rlCount = rebuildCount(rlCount, buffer[i], countLen);
+                countLen++;
             }
             else
             {
-                struct runLength rl = {rlChar, rlCount, curPosBWT, occ[map(rlChar)]};
+                struct RunLength rl = {rlChar, rlCount, curPosBWT, occ[map(rlChar)]};
                 insert(&pq, rl);
                 occ[map(rlChar)] += rlCount;
                 curPosBWT += rlCount;
                 rlChar = buffer[i];
                 rlCount = 1;
-                acc = 0;
+                countLen = 0;
             }
         }
 
         while (bytesRead > i && MSB(buffer[i]))
         { // if last byte is run length
-            rlCount = rebuildCount(rlCount, buffer[i], acc);
-            acc++;
+            rlCount = rebuildCount(rlCount, buffer[i], countLen);
+            countLen++;
             i++;
         }
 
@@ -201,7 +189,7 @@ int *generateIndex(FILE *rlb, FILE *index, int checkpointCount)
         curPosBWT += rlCount;
 
         positions[writeCpCount] = curPosBWT;
-        qsort(pq.data, pq.size, sizeof(struct runLength), compareRL);
+        qsort(pq.data, pq.size, sizeof(struct RunLength), compareRL);
         unsigned int quickTable[QUICK_TABLE_LEN * 3];
         for (int j = 0; j < QUICK_TABLE_LEN; j++)
         {
@@ -267,22 +255,22 @@ int *generateCTable(FILE *rlb, FILE *index, int checkpointCount)
 
         char rlChar = buffer[i];
         unsigned int rlCount = 1;
-        unsigned char acc = 0;
+        unsigned char countLen = 0;
 
         for (i++; i < bytesRead; i++)
         {
             if (MSB(buffer[i]))
             {
 
-                rlCount = rebuildCount(rlCount, buffer[i], acc);
-                acc++;
+                rlCount = rebuildCount(rlCount, buffer[i], countLen);
+                countLen++;
             }
             else
             {
                 cTable[map(rlChar) + 1] += rlCount;
                 rlChar = buffer[i];
                 rlCount = 1;
-                acc = 0;
+                countLen = 0;
             }
         }
 
@@ -321,15 +309,117 @@ int findIndex(int const arr[], int n, int key)
 static unsigned long callOcc = 0;
 static unsigned long callDecode = 0;
 
-int occFunc(char ch, int pos, Params const *params)
+int doubleOccFunc(char ch, int pos1, int pos2, int *occ1, Params const *params)
 {
+    int nearest = findIndex(params->positions, params->checkpointCount, pos1);
+    int nearest2 = findIndex(params->positions, params->checkpointCount, pos2);
+    if (nearest != nearest2)
+    {
+        *occ1 = occFunc(ch, pos1, nearest, params);
+        return occFunc(ch, pos2, nearest2, params);
+    }
     callOcc++;
-    int nearest = findIndex(params->positions, params->checkpointCount, pos);
 
     int posBWT = params->positions[nearest];
     int posRLB = nearest * CHECKPOINT_LENGTH;
     int occ[ALPHABET_SIZE] = {0};
-    if (params->checkpointCount && nearest)
+    if (nearest)
+    {
+        fseek(params->index,
+              (params->checkpointCount + QUICK_TABLE_LEN * 3) * sizeof(int) + (nearest - 1) * PIECE_LENGTH, SEEK_SET);
+        unsigned long readN = fread(&occ, sizeof(int), ALPHABET_SIZE, params->index);
+        if (readN != ALPHABET_SIZE)
+        {
+            fprintf(stderr, "Failed to read occ from index file\n");
+            exit(EXIT_FAILURE);
+        }
+    }
+
+    unsigned char findOcc1 = 0;
+    if (pos1 == posBWT)
+    {
+        *occ1 = occ[map(ch)];
+        findOcc1 = 1;
+    }
+    if (pos2 == posBWT)
+    {
+        return occ[map(ch)];
+    }
+
+    fseek(params->rlb, posRLB, SEEK_SET);
+    unsigned char buffer[CHECKPOINT_LENGTH + 4];
+    short bytesRead = (short)fread(buffer, 1, CHECKPOINT_LENGTH + 4, params->rlb);
+    if (bytesRead <= 0)
+    {
+        fprintf(stderr, "Failed to read from rlb file\n");
+        exit(EXIT_FAILURE);
+    }
+
+    short i = 0;
+    while (bytesRead > i && MSB(buffer[i]))
+    { // if first byte is run length
+        i++;
+    }
+
+    char rlChar = buffer[i];
+    unsigned int rlCount = 1;
+    unsigned char countLen = 0;
+    for (i++; i < bytesRead; i++)
+    {
+        if (MSB(buffer[i]))
+        {
+            rlCount = rebuildCount(rlCount, buffer[i], countLen);
+            countLen++;
+        }
+        else
+        {
+            if (posBWT + rlCount > pos1 && !findOcc1)
+            {
+                *occ1 = occ[map(ch)] + (pos1 - posBWT) * (rlChar == ch);
+                findOcc1 = 1;
+            }
+            if (posBWT + rlCount > pos2)
+            {
+                return occ[map(ch)] + (pos2 - posBWT) * (rlChar == ch);
+            }
+            posBWT += rlCount;
+            occ[map(rlChar)] += rlCount;
+            rlChar = buffer[i];
+            rlCount = 1;
+            countLen = 0;
+        }
+    }
+    if (pos1 == posBWT && !findOcc1)
+    {
+        *occ1 = occ[map(ch)];
+        findOcc1 = 1;
+    }
+    if (pos2 == posBWT)
+    {
+        return occ[map(ch)];
+    }
+    if (countLen)
+    {
+        if (!findOcc1)
+        {
+            *occ1 = occ[map(ch)] + (pos1 - posBWT) * (rlChar == ch);
+        }
+        return occ[map(ch)] + (pos2 - posBWT) * (rlChar == ch);
+    }
+    if (!findOcc1)
+    {
+        *occ1 = occ[map(ch)] + (rlChar == ch);
+    }
+    return occ[map(ch)] + (rlChar == ch);
+}
+
+int occFunc(char ch, int pos, int nearest, Params const *params)
+{
+    callOcc++;
+    int posBWT = params->positions[nearest];
+    int posRLB = nearest * CHECKPOINT_LENGTH;
+    int occ[ALPHABET_SIZE] = {0};
+    if (nearest)
     {
         fseek(params->index,
               (params->checkpointCount + QUICK_TABLE_LEN * 3) * sizeof(int) + (nearest - 1) * PIECE_LENGTH, SEEK_SET);
@@ -361,14 +451,14 @@ int occFunc(char ch, int pos, Params const *params)
 
     char rlChar = buffer[i];
     unsigned int rlCount = 1;
-    unsigned char acc = 0;
+    unsigned char countLen = 0;
 
     for (i++; i < bytesRead; i++)
     {
         if (MSB(buffer[i]))
         {
-            rlCount = rebuildCount(rlCount, buffer[i], acc);
-            acc++;
+            rlCount = rebuildCount(rlCount, buffer[i], countLen);
+            countLen++;
         }
         else
         {
@@ -380,21 +470,18 @@ int occFunc(char ch, int pos, Params const *params)
             occ[map(rlChar)] += rlCount;
             rlChar = buffer[i];
             rlCount = 1;
-            acc = 0;
+            countLen = 0;
         }
     }
     if (pos == posBWT)
     {
         return occ[map(ch)];
     }
-    if (acc)
+    if (countLen)
     {
         return occ[map(ch)] + (pos - posBWT) * (rlChar == ch);
     }
-    else
-    {
-        return occ[map(ch)] + (rlChar == ch);
-    }
+    return occ[map(ch)] + (rlChar == ch);
 }
 
 struct checkpoint
@@ -445,7 +532,7 @@ char decode(int pos, int *rank, int *count, int *startPos, Params const *params)
         if (rlIndex >= 0)
         {
             unsigned long rl = (((unsigned long)cp.quickTable[rlIndex * 3]) << 32) | cp.quickTable[rlIndex * 3 + 1];
-            struct runLength decoded = decodeRL(rl);
+            struct RunLength decoded = decodeRL(rl);
             if (decoded.pos <= pos && decoded.pos + decoded.count > pos)
             {
                 *rank = cp.quickTable[rlIndex * 3 + 2] + (pos - decoded.pos);
@@ -483,7 +570,7 @@ char decode(int pos, int *rank, int *count, int *startPos, Params const *params)
         if (rlIndex >= 0)
         {
             unsigned long rl = (((unsigned long)cp.quickTable[rlIndex * 3]) << 32) | cp.quickTable[rlIndex * 3 + 1];
-            struct runLength decoded = decodeRL(rl);
+            struct RunLength decoded = decodeRL(rl);
             if (decoded.pos <= pos && decoded.pos + decoded.count > pos)
             {
                 *rank = cp.quickTable[rlIndex * 3 + 2] + (pos - decoded.pos);
@@ -513,15 +600,15 @@ char decode(int pos, int *rank, int *count, int *startPos, Params const *params)
 
     char rlChar = buffer[i];
     unsigned int rlCount = 1;
-    unsigned char acc = 0;
+    unsigned char countLen = 0;
 
     for (i++; i < bytesRead; i++)
     {
         if (MSB(buffer[i]))
         {
 
-            rlCount = rebuildCount(rlCount, buffer[i], acc);
-            acc++;
+            rlCount = rebuildCount(rlCount, buffer[i], countLen);
+            countLen++;
         }
         else
         {
@@ -536,11 +623,11 @@ char decode(int pos, int *rank, int *count, int *startPos, Params const *params)
             cp.occTable[map(rlChar)] += rlCount;
             rlChar = buffer[i];
             rlCount = 1;
-            acc = 0;
+            countLen = 0;
         }
     }
 
-    if (acc > 0)
+    if (countLen > 0)
     {
         *rank = cp.occTable[map(rlChar)] + (pos - posBWT);
     }
