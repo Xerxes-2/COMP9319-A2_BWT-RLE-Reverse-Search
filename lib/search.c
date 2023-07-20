@@ -34,10 +34,6 @@ struct cacheItem
 };
 
 static struct cacheItem **cache;
-
-static int cacheHits = 0;
-static int cacheMisses = 0;
-static int maxCacheSize = 0;
 static int cacheSize = 0;
 
 int searchPattern(const char *pattern, int *end, Params const *params)
@@ -103,7 +99,6 @@ void search(char const *pattern, Params const *params)
     free(record);
     free(newPattern);
     free(idArr);
-    // summary();
 }
 
 unsigned int findId(int pos, Params const *params)
@@ -144,7 +139,6 @@ char rebuildCached(int pos, int *rank, Params const *params)
     {
         if (item->pos <= pos && item->pos + item->count > pos)
         {
-            cacheHits++;
             // Found a match in the cache. Use the cached result.
             *rank = item->rank + pos - item->pos;
             char ch = item->ch;
@@ -160,7 +154,6 @@ char rebuildCached(int pos, int *rank, Params const *params)
         prev = &(*prev)->next;
         item = item->next;
     }
-    cacheMisses++;
 
     // No matching cache item found. Compute the result.
     int count;
@@ -179,10 +172,6 @@ char rebuildCached(int pos, int *rank, Params const *params)
         newItem->next = cache[cp];
         cache[cp] = newItem;
         cacheSize++;
-        if (cacheSize > maxCacheSize)
-        {
-            maxCacheSize = cacheSize;
-        }
     }
 
     return newCh;
@@ -190,28 +179,17 @@ char rebuildCached(int pos, int *rank, Params const *params)
 
 void freeCache(int n)
 {
-    int deepest = 0;
     for (int i = 0; i < n; i++)
     {
-        int depth = 0;
         struct cacheItem *item = cache[i];
         while (item != NULL)
         {
-            depth++;
             struct cacheItem *next = item->next;
             free(item);
             item = next;
         }
-        if (depth > deepest)
-        {
-            deepest = depth;
-        }
     }
     free(cache);
-    // printf("Deepest cache: %d\n", deepest);
-    // printf("Cache hits: %d\n", cacheHits);
-    // printf("Cache misses: %d\n", cacheMisses);
-    // printf("Max cache size: %d\n", maxCacheSize);
 }
 
 void rebuildRec(char *record, int pos, Params const *params)

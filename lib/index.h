@@ -24,4 +24,3 @@ int doubleOccFunc(char ch, int pos1, int pos2, int *occ1, Params const *params);
 int occFunc(char ch, int pos, int nearest, Params const *params);
 char decode(int pos, int *rank, int *count, int *startPos, Params const *params);
 int findIndex(int const arr[], int n, int key);
-void summary();

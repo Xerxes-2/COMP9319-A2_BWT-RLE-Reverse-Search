@@ -306,9 +306,6 @@ int findIndex(int const arr[], int n, int key)
     return right; // return the last valid position
 }
 
-static unsigned long callOcc = 0;
-static unsigned long callDecode = 0;
-
 int doubleOccFunc(char ch, int pos1, int pos2, int *occ1, Params const *params)
 {
     int nearest = findIndex(params->positions, params->checkpointCount, pos1);
@@ -318,7 +315,6 @@ int doubleOccFunc(char ch, int pos1, int pos2, int *occ1, Params const *params)
         *occ1 = occFunc(ch, pos1, nearest, params);
         return occFunc(ch, pos2, nearest2, params);
     }
-    callOcc++;
 
     int posBWT = params->positions[nearest];
     int posRLB = nearest * CHECKPOINT_LENGTH;
@@ -415,7 +411,6 @@ int doubleOccFunc(char ch, int pos1, int pos2, int *occ1, Params const *params)
 
 int occFunc(char ch, int pos, int nearest, Params const *params)
 {
-    callOcc++;
     int posBWT = params->positions[nearest];
     int posRLB = nearest * CHECKPOINT_LENGTH;
     int occ[ALPHABET_SIZE] = {0};
@@ -508,10 +503,8 @@ int findRL(unsigned int const arr[], int key)
     return right; // return the last valid position
 }
 
-int foundInTops = 0;
 char decode(int pos, int *rank, int *count, int *startPos, Params const *params)
 {
-    callDecode++;
     int nearest = findIndex(params->positions, params->checkpointCount, pos);
 
     int posBWT = params->positions[nearest];
@@ -562,7 +555,6 @@ char decode(int pos, int *rank, int *count, int *startPos, Params const *params)
                 *rank = cp.quickTable[rlIndex * 3 + 2] + (pos - decoded.pos);
                 *count = decoded.count;
                 *startPos = decoded.pos;
-                foundInTops++;
                 return decoded.ch;
             }
         }
@@ -625,11 +617,4 @@ char decode(int pos, int *rank, int *count, int *startPos, Params const *params)
     *count = rlCount;
     *startPos = posBWT;
     return rlChar;
-}
-
-void summary()
-{
-    printf("Total call of occ: %lu\n", callOcc);
-    printf("Total call of decode: %lu\n", callDecode);
-    printf("Found in tops: %d\n", foundInTops);
 }
