@@ -108,7 +108,7 @@ void search(char const *pattern, Params const *params)
 
 unsigned int findId(int pos, Params const *params)
 {
-    char *id = (char *)malloc(16);
+    static char id[16];
     short i = 0;
     int rank;
     int isId = 0;
@@ -132,18 +132,14 @@ unsigned int findId(int pos, Params const *params)
     }
     reverse(id);
     unsigned int idInt = atoi(id);
-    free(id);
     return idInt;
 }
 
 char rebuildCached(int pos, int *rank, Params const *params)
 {
     int cp = findIndex(params->positions, params->checkpointCount, pos);
-    int count;
-    int startPos;
-
     struct cacheItem *item = cache[cp];
-    struct cacheItem *prev = NULL;
+    struct cacheItem **prev = &cache[cp];
     while (item != NULL)
     {
         if (item->pos <= pos && item->pos + item->count > pos)
@@ -155,25 +151,20 @@ char rebuildCached(int pos, int *rank, Params const *params)
             if (item->count == 1)
             {
                 // Remove the item from the cache.
-                if (prev == NULL)
-                {
-                    cache[cp] = item->next;
-                }
-                else
-                {
-                    prev->next = item->next;
-                }
+                *prev = item->next;
                 free(item);
                 cacheSize--;
             }
             return ch;
         }
-        prev = item;
+        prev = &(*prev)->next;
         item = item->next;
     }
     cacheMisses++;
 
     // No matching cache item found. Compute the result.
+    int count;
+    int startPos;
     char newCh = decode(pos, rank, &count, &startPos, params);
 
     if (cacheSize < CACHE_SIZE)
