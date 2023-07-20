@@ -55,7 +55,7 @@ int searchPattern(const char *pattern, int *end, Params const *params)
 void search(char const *pattern, Params const *params)
 {
     int indexEnd;
-    cache = calloc(params->checkpointCount + 1, sizeof(struct cacheItem **));
+    cache = calloc(params->checkpointCount + 1, sizeof(struct cacheItem *));
     int indexStart = searchPattern(pattern, &indexEnd, params);
     unsigned int *idArr = (unsigned int *)malloc((indexEnd - indexStart) * sizeof(unsigned int));
     int j = 0;
