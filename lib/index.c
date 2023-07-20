@@ -503,14 +503,8 @@ int findRL(unsigned int const arr[], int key)
     return right; // return the last valid position
 }
 
-char decode(int pos, int *rank, int *count, int *startPos, Params const *params)
+char readCP(struct checkpoint *cp, int nearest, Params const *params)
 {
-    int nearest = findIndex(params->positions, params->checkpointCount, pos);
-
-    int posBWT = params->positions[nearest];
-    int posRLB = nearest * CHECKPOINT_LENGTH;
-
-    struct checkpoint cp = {0};
     long readPos;
     long readLength;
     void *cpPtr;
@@ -518,20 +512,20 @@ char decode(int pos, int *rank, int *count, int *startPos, Params const *params)
     {
         readPos = (params->checkpointCount + QUICK_TABLE_LEN * 3) * sizeof(int) + (nearest - 1) * PIECE_LENGTH;
         readLength = ALPHABET_SIZE + QUICK_TABLE_LEN * 3;
-        cpPtr = &cp;
+        cpPtr = cp;
     }
     else if (nearest == params->checkpointCount && nearest)
     {
         readPos = (params->checkpointCount + QUICK_TABLE_LEN * 3) * sizeof(int) +
                   (params->checkpointCount - 1) * PIECE_LENGTH;
         readLength = ALPHABET_SIZE;
-        cpPtr = &cp.occTable;
+        cpPtr = &cp->occTable;
     }
     else if (params->checkpointCount)
     {
         readPos = params->checkpointCount * sizeof(int);
         readLength = QUICK_TABLE_LEN * 3;
-        cpPtr = &cp.quickTable;
+        cpPtr = &cp->quickTable;
     }
     if (params->checkpointCount)
     {
@@ -543,7 +537,18 @@ char decode(int pos, int *rank, int *count, int *startPos, Params const *params)
             exit(EXIT_FAILURE);
         }
     }
-    if (params->checkpointCount && nearest < params->checkpointCount)
+    return params->checkpointCount && nearest < params->checkpointCount;
+}
+
+char decode(int pos, int *rank, int *count, int *startPos, Params const *params)
+{
+    int nearest = findIndex(params->positions, params->checkpointCount, pos);
+
+    int posBWT = params->positions[nearest];
+    int posRLB = nearest * CHECKPOINT_LENGTH;
+
+    struct checkpoint cp = {0};
+    if (readCP(&cp, nearest, params))
     {
         int rlIndex = findRL(cp.quickTable, pos);
         if (rlIndex >= 0)
