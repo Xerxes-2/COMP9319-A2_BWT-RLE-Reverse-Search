@@ -89,7 +89,7 @@ int searchID(unsigned int id, Params const *params)
     static char pattern[16];
     sprintf(pattern, "[%d]", id);
     reverse(pattern);
-    int index = params->cTable[map(pattern[0])];
+    int index = params->cTable[']' - 39];
     for (int i = 1; i < strlen(pattern); i++)
     {
         int occ = occFunc(pattern[i], index, params);
@@ -116,6 +116,7 @@ void search(char const *pattern, Params const *params)
     }
     qsort(idArr, matches, sizeof(int), compareInt);
     char *record = malloc(MAX_RECORD_LENGTH * sizeof(char));
+    unsigned int upperBound = minId + recordCount;
     for (int i = 0; i < matches; i++)
     {
         if (i > 0 && idArr[i] == idArr[i - 1])
@@ -123,7 +124,7 @@ void search(char const *pattern, Params const *params)
             // skip duplicate
             continue;
         }
-        if (idArr[i] == minId + recordCount)
+        if (idArr[i] == upperBound)
         {
             indexStart = searchID(minId, params);
         }
@@ -166,7 +167,8 @@ unsigned int findId(int pos, Params const *params)
         id[i - 1] = '\0';
     }
     reverse(id);
-    unsigned int idInt = atoi(id);
+    char *end;
+    unsigned int idInt = (unsigned int)strtol(id, &end, 10);
     return idInt;
 }
 
