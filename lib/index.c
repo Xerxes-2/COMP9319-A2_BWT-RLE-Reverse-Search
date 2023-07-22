@@ -136,12 +136,14 @@ int *generateIndex(FILE *rlb, FILE *index, int checkpointCount)
     }
     // reserve rlbSize * 4 bytes for positions in BWT
     fseek(index, checkpointCount * sizeof(int), SEEK_SET);
-    int *positions = (int *)malloc(checkpointCount * sizeof(int));
+    int *positions = (int *)malloc((checkpointCount + 1) * sizeof(int));
     if (positions == NULL)
     {
         fprintf(stderr, "Failed to allocate memory for positions\n");
         exit(EXIT_FAILURE);
     }
+    positions[0] = 0;
+    int *writePositions = positions + 1;
     int occ[ALPHABET_SIZE] = {0};
     int writeCpCount = 0;
     int curPosBWT = 0;
@@ -188,7 +190,7 @@ int *generateIndex(FILE *rlb, FILE *index, int checkpointCount)
         occ[map(rlChar)] += rlCount;
         curPosBWT += rlCount;
 
-        positions[writeCpCount] = curPosBWT;
+        writePositions[writeCpCount] = curPosBWT;
         qsort(pq.data, pq.size, sizeof(struct RunLength), compareRL);
         unsigned int quickTable[QUICK_TABLE_LEN * 3];
         for (int j = 0; j < QUICK_TABLE_LEN; j++)
@@ -207,19 +209,9 @@ int *generateIndex(FILE *rlb, FILE *index, int checkpointCount)
     }
 
     fseek(index, 0, SEEK_SET);
-    fwrite(positions, sizeof(int), checkpointCount, index);
+    fwrite(writePositions, sizeof(int), checkpointCount, index);
 
-    int *newPositions = malloc((checkpointCount + 1) * sizeof(int));
-    if (newPositions == NULL)
-    {
-        fprintf(stderr, "Failed to allocate memory for newPositions\n");
-        exit(EXIT_FAILURE);
-    }
-    newPositions[0] = 0;
-    memcpy(newPositions + 1, positions, checkpointCount * sizeof(int));
-    free(positions);
-
-    return newPositions;
+    return positions;
 }
 
 int *generateCTable(FILE *rlb, FILE *index, int checkpointCount)

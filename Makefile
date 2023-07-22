@@ -10,7 +10,7 @@ LIB_DIR=./lib/
 
 # Define the flags for the compiler. 
 # -I. adds current directory in the include path.
-CFLAGS=-g -O3
+CFLAGS=-g -O3 -march=native
 
 # List of source files
 SRC=$(SRC_DIR)main.c $(LIB_DIR)index.c $(LIB_DIR)search.c
