@@ -46,7 +46,8 @@ int searchPattern(const char *pattern, int *end, Params const *params)
     int occEnd;
     for (int i = 1; i < strlen(pattern); i++)
     {
-        occEnd = doubleOccFunc(pattern[i], indexStart, indexEnd, &occStart, params);
+        occStart = occFunc(pattern[i], indexStart, params);
+        occEnd = occFunc(pattern[i], indexEnd, params);
         indexStart = nthChar(occStart, pattern[i], params->cTable);
         indexEnd = nthChar(occEnd, pattern[i], params->cTable);
     }
@@ -83,15 +84,6 @@ void findMinId(Params const *Params)
     minId = left;
 }
 
-char mapIDchar(char ch)
-{
-    if (ch == '[')
-    {
-        return 10;
-    }
-    return ch - '0';
-}
-
 int searchID(unsigned int id, Params const *params)
 {
     static char pattern[16];
@@ -100,8 +92,7 @@ int searchID(unsigned int id, Params const *params)
     int index = params->cTable[map(pattern[0])];
     for (int i = 1; i < strlen(pattern); i++)
     {
-        int nearest = findIndex(params->positions, params->checkpointCount, index);
-        int occ = occFunc(pattern[i], index, nearest, params);
+        int occ = occFunc(pattern[i], index, params);
         index = nthChar(occ, pattern[i], params->cTable);
     }
     return index;
@@ -113,19 +104,19 @@ void search(char const *pattern, Params const *params)
     cache = calloc(params->checkpointCount + 1, sizeof(struct cacheRL *));
     int indexStart = searchPattern(pattern, &indexEnd, params);
     unsigned int *idArr = (unsigned int *)malloc((indexEnd - indexStart) * sizeof(unsigned int));
-    int j = 0;
+    int matches = 0;
     for (int i = indexStart; i < indexEnd; i++)
     {
         // To decode entire record, we need to find the next record, so plus 1
-        idArr[j++] = findId(i, params) + 1;
+        idArr[matches++] = findId(i, params) + 1;
     }
     if (recordCount == 0)
     {
         findMinId(params);
     }
-    qsort(idArr, j, sizeof(int), compareInt);
+    qsort(idArr, matches, sizeof(int), compareInt);
     char *record = malloc(MAX_RECORD_LENGTH * sizeof(char));
-    for (int i = 0; i < j; i++)
+    for (int i = 0; i < matches; i++)
     {
         if (i > 0 && idArr[i] == idArr[i - 1])
         {
