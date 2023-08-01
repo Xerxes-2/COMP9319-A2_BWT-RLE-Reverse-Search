@@ -4,3 +4,7 @@ ans/
 helper/
 test/
 bwtsearch
+bsearchResult.txt
+bwtsearchResult.txt
+compare.ps1
+out
