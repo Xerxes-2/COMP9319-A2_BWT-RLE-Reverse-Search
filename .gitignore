@@ -8,3 +8,4 @@ bsearchResult.txt
 bwtsearchResult.txt
 compare.ps1
 out
+*.dSYM/

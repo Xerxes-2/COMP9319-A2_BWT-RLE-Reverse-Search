@@ -1,5 +1,13 @@
-# Define compiler
-CC=gcc
+# Detect the OS
+UNAME_S := $(shell uname -s)
+
+# Choose the compiler based on the OS
+ifeq ($(UNAME_S),Linux)
+    CC=gcc
+endif
+ifeq ($(UNAME_S),Darwin)  # Darwin is for macOS
+    CC=clang
+endif
 
 # Define the target name
 TARGET=bwtsearch
@@ -8,7 +16,7 @@ TARGET=bwtsearch
 SRC_DIR=./
 LIB_DIR=./lib/
 
-# Define the flags for the compiler. 
+# Define the flags for the compiler.
 # -I. adds current directory in the include path.
 CFLAGS=-g -O3 -march=native
 
