@@ -4,6 +4,7 @@
 #include <string.h>
 
 #define MSB(x) ((x) >> 7)
+extern Params *params;
 
 unsigned char map(char ch)
 {
@@ -298,7 +299,7 @@ int findIndex(int const arr[], int n, int key)
     return right; // return the last valid position
 }
 
-int occFunc(char ch, int pos, Params const *params)
+int occFunc(char ch, int pos)
 {
     int nearest = findIndex(params->positions, params->checkpointCount, pos);
     int posBWT = params->positions[nearest];
@@ -442,7 +443,7 @@ char readCP(struct checkpoint *cp, int nearest, Params const *params)
     return params->checkpointCount && nearest < params->checkpointCount;
 }
 
-char decode(int pos, int *rank, int *count, int *startPos, Params const *params)
+char decode(int pos, int *rank, int *count, int *startPos)
 {
     int nearest = findIndex(params->positions, params->checkpointCount, pos);
 

@@ -5,6 +5,8 @@
 #include <sys/stat.h>
 #include <sys/mman.h>
 
+Params *params;
+
 int main(int argc, char *argv[])
 {
     FILE *rlb;
@@ -101,9 +103,16 @@ int main(int argc, char *argv[])
         idxData = mmap(NULL, idxSize, PROT_READ, MAP_PRIVATE, fileno(index), 0);
     }
 
-    Params params = {rlbData, rlbSize, idxData, idxSize, checkpointCount, cTable, positions};
+    params = malloc(sizeof(Params));
+    params->rlbData = rlbData;
+    params->rlbSize = rlbSize;
+    params->indexData = idxData;
+    params->idxSize = idxSize;
+    params->checkpointCount = checkpointCount;
+    params->cTable = cTable;
+    params->positions = positions;
 
-    search(pattern, &params);
+    search(pattern);
 
     free(positions);
     free(cTable);
@@ -117,6 +126,6 @@ int main(int argc, char *argv[])
     {
         fclose(index);
     }
-
+    free(params);
     return 0;
 }

@@ -2,6 +2,10 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include "thpool.h"
+#include <sys/sysinfo.h>
+
+extern Params *params;
 
 char *reverse(char str[])
 {
@@ -36,7 +40,7 @@ static int cacheSize = 0;
 static unsigned int recordCount = 0;
 static unsigned int minId = 0;
 
-int searchPattern(const char *pattern, int *end, Params const *params)
+int searchPattern(const char *pattern, int *end)
 {
     int indexStart = params->cTable[map(pattern[0])];
     int indexEnd = params->cTable[map(pattern[0]) + 1];
@@ -44,8 +48,8 @@ int searchPattern(const char *pattern, int *end, Params const *params)
     int occEnd;
     for (int i = 1; i < strlen(pattern); i++)
     {
-        occStart = occFunc(pattern[i], indexStart, params);
-        occEnd = occFunc(pattern[i], indexEnd, params);
+        occStart = occFunc(pattern[i], indexStart);
+        occEnd = occFunc(pattern[i], indexEnd);
         indexStart = nthChar(occStart, pattern[i], params->cTable);
         indexEnd = nthChar(occEnd, pattern[i], params->cTable);
     }
@@ -53,10 +57,15 @@ int searchPattern(const char *pattern, int *end, Params const *params)
     return indexStart;
 }
 
-void findMinId(Params const *Params)
+void findMinId()
 {
-    recordCount = Params->cTable[map('[') + 1] - Params->cTable[map('[')];
-    unsigned int right = findId(0, Params);
+    recordCount = params->cTable[map('[') + 1] - params->cTable[map('[')];
+    unsigned int right;
+    struct FindIdParams *fParams = malloc(sizeof(struct FindIdParams));
+    fParams->pos = 0;
+    fParams->id = &right;
+    findId(fParams);
+    free(fParams);
     unsigned int left = 0;
     if (right >= recordCount)
     {
@@ -69,7 +78,7 @@ void findMinId(Params const *Params)
         unsigned int mid = (left + right) / 2;
         sprintf(pattern, "[%d]", mid);
         reverse(pattern);
-        int indexStart = searchPattern(pattern, &indexEnd, Params);
+        int indexStart = searchPattern(pattern, &indexEnd);
         if (indexStart == indexEnd)
         {
             left = mid + 1;
@@ -82,35 +91,51 @@ void findMinId(Params const *Params)
     minId = left;
 }
 
-int searchID(unsigned int id, Params const *params)
+int searchID(unsigned int id)
 {
-    static char pattern[16];
+    char pattern[16];
     sprintf(pattern, "[%d]", id);
     reverse(pattern);
     int index = params->cTable[']' - 39];
     for (int i = 1; i < strlen(pattern); i++)
     {
-        int occ = occFunc(pattern[i], index, params);
+        int occ = occFunc(pattern[i], index);
         index = nthChar(occ, pattern[i], params->cTable);
     }
     return index;
 }
 
-void search(char const *pattern, Params const *params)
+void search(char const *pattern)
 {
     int indexEnd;
     cache = calloc(params->checkpointCount + 1, sizeof(struct cacheRL *));
-    int indexStart = searchPattern(pattern, &indexEnd, params);
+    int indexStart = searchPattern(pattern, &indexEnd);
     unsigned int *idArr = (unsigned int *)malloc((indexEnd - indexStart) * sizeof(unsigned int));
-    int matches = 0;
-    for (int i = indexStart; i < indexEnd; i++)
+    int matches = indexEnd - indexStart;
+    // get cpu thread count
+    int cpuCount = get_nprocs();
+    threadpool pool = thpool_init(cpuCount);
+    struct FindIdParams **fParams = malloc(matches * sizeof(struct FindIdParams *));
+    for (int i = 0; i < matches; i++)
     {
         // To decode entire record, we need to find the next record, so plus 1
-        idArr[matches++] = findId(i, params) + 1;
+        fParams[i] = malloc(sizeof(struct FindIdParams));
+        fParams[i]->pos = indexStart + i;
+        fParams[i]->id = idArr + i;
+        // findId(&fParams);
+        thpool_add_work(pool, (void *)findId, fParams[i]);
     }
+    thpool_wait(pool);
+    thpool_destroy(pool);
+    for (int i = 0; i < matches; i++)
+    {
+        free(fParams[i]);
+        idArr[i]++;
+    }
+    free(fParams);
     if (recordCount == 0)
     {
-        findMinId(params);
+        findMinId();
     }
     qsort(idArr, matches, sizeof(int), compareInt);
     char *record = malloc(MAX_RECORD_LENGTH * sizeof(char));
@@ -124,29 +149,30 @@ void search(char const *pattern, Params const *params)
         }
         if (idArr[i] == upperBound)
         {
-            indexStart = searchID(minId, params);
+            indexStart = searchID(minId);
         }
         else
         {
-            indexStart = searchID(idArr[i], params);
+            indexStart = searchID(idArr[i]);
         }
         sprintf(record, "[%d]", idArr[i] - 1);
-        rebuildRec(record + strlen(record), indexStart, params);
+        rebuildRec(record + strlen(record), indexStart);
         printf("%s\n", record);
     }
-
     freeCache(params->checkpointCount + 1);
     free(record);
     free(idArr);
 }
 
-unsigned int findId(int pos, Params const *params)
+void *findId(void *_params)
 {
-    static char id[16];
+    struct FindIdParams *__params = (struct FindIdParams *)_params;
+    int pos = __params->pos;
+    char id[16];
     short i = 0;
     int rank;
     int isId = 0;
-    char ch = rebuildCached(pos, &rank, params);
+    char ch = rebuildCached(pos, &rank);
     while (ch != '[' && i < MAX_RECORD_LENGTH)
     {
         if (ch == ']')
@@ -154,7 +180,7 @@ unsigned int findId(int pos, Params const *params)
             isId = 1;
         }
         pos = nthChar(rank, ch, params->cTable);
-        ch = rebuildCached(pos, &rank, params);
+        ch = rebuildCached(pos, &rank);
         if (isId)
         {
             id[i++] = ch;
@@ -167,52 +193,59 @@ unsigned int findId(int pos, Params const *params)
     reverse(id);
     char *end;
     unsigned int idInt = (unsigned int)strtol(id, &end, 10);
-    return idInt;
+    *(__params->id) = idInt;
+    return NULL;
 }
 
-char rebuildCached(int pos, int *rank, Params const *params)
+char rebuildCached(int pos, int *rank)
 {
     int cp = findIndex(params->positions, params->checkpointCount, pos);
-    struct cacheRL *item = cache[cp];
-    struct cacheRL **prev = &cache[cp];
-    while (item != NULL)
-    {
-        if (item->pos <= pos && item->pos + item->count > pos)
-        {
-            // Found a match in the cache. Use the cached result.
-            *rank = item->rank + pos - item->pos;
-            char ch = item->ch;
-            if (item->count == 1)
-            {
-                // Remove the item from the cache.
-                *prev = item->next;
-                free(item);
-                cacheSize--;
-            }
-            return ch;
-        }
-        prev = &(*prev)->next;
-        item = item->next;
-    }
+    // lock mutex
+    // pthread_mutex_lock(&mutex);
+    // struct cacheRL *item = cache[cp];
+    // struct cacheRL **prev = &cache[cp];
+    // while (item != NULL)
+    // {
+    //     if (item->pos <= pos && item->pos + item->count > pos)
+    //     {
+    //         // Found a match in the cache. Use the cached result.
+    //         *rank = item->rank + pos - item->pos;
+    //         char ch = item->ch;
+    //         if (item->count == 1)
+    //         {
+    //             // Remove the item from the cache.
+    //             *prev = item->next;
+    //             free(item);
+    //             cacheSize--;
+    //         }
+    //         pthread_mutex_unlock(&mutex);
+    //         return ch;
+    //     }
+    //     prev = &(*prev)->next;
+    //     item = item->next;
+    // }
+    // pthread_mutex_unlock(&mutex);
 
     // No matching cache item found. Compute the result.
     int count;
     int startPos;
-    char newCh = decode(pos, rank, &count, &startPos, params);
+    char newCh = decode(pos, rank, &count, &startPos);
 
-    if (cacheSize < CACHE_SIZE)
-    {
-        // Allocate a new cache item.
-        struct cacheRL *newItem = malloc(sizeof(struct cacheRL));
-        newItem->ch = newCh;
-        newItem->rank = *rank - pos + startPos;
-        newItem->pos = startPos;
-        newItem->count = count;
+    // if (cacheSize < CACHE_SIZE)
+    // {
+    //     // Allocate a new cache item.
+    //     struct cacheRL *newItem = malloc(sizeof(struct cacheRL));
+    //     newItem->ch = newCh;
+    //     newItem->rank = *rank - pos + startPos;
+    //     newItem->pos = startPos;
+    //     newItem->count = count;
 
-        newItem->next = cache[cp];
-        cache[cp] = newItem;
-        cacheSize++;
-    }
+    //     pthread_mutex_lock(&mutex);
+    //     newItem->next = cache[cp];
+    //     cache[cp] = newItem;
+    //     cacheSize++;
+    //     pthread_mutex_unlock(&mutex);
+    // }
 
     return newCh;
 }
@@ -232,16 +265,16 @@ void freeCache(int n)
     free(cache);
 }
 
-void rebuildRec(char *record, int pos, Params const *params)
+void rebuildRec(char *record, int pos)
 {
     short i = 0;
     int rank;
-    char ch = rebuildCached(pos, &rank, params);
+    char ch = rebuildCached(pos, &rank);
     while (ch != ']' && i < MAX_RECORD_LENGTH)
     {
         record[i++] = ch;
         pos = nthChar(rank, ch, params->cTable);
-        ch = rebuildCached(pos, &rank, params);
+        ch = rebuildCached(pos, &rank);
     }
     record[i] = '\0';
     reverse(record);

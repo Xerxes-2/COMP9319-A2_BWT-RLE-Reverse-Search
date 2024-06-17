@@ -6,8 +6,13 @@
 #include "index.h"
 
 char *reverse(char str[]);
-void search(char const *pattern, Params const *params);
-void rebuildRec(char *record, int pos, Params const *params);
-unsigned int findId(int pos, Params const *params);
-char rebuildCached(int pos, int *rank, Params const *params);
+void search(char const *pattern);
+void rebuildRec(char *record, int pos);
+struct FindIdParams
+{
+    int pos;
+    unsigned int *id;
+};
+void *findId(void *_params);
+char rebuildCached(int pos, int *rank);
 void freeCache(int n);

@@ -22,6 +22,6 @@ unsigned char map(char ch);
 int *generateIndex(FILE *rlb, FILE *index, int checkpointCount);
 int *generateCTable(FILE *rlb, FILE *index, int checkpointCount);
 int nthChar(int nth, char ch, int const *cTable);
-int occFunc(char ch, int pos,  Params const *params);
-char decode(int pos, int *rank, int *count, int *startPos, Params const *params);
+int occFunc(char ch, int pos);
+char decode(int pos, int *rank, int *count, int *startPos);
 int findIndex(int const arr[], int n, int key);
