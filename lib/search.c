@@ -5,16 +5,14 @@
 
 char *reverse(char str[])
 {
-    char *start = str;
-    char *end = str + strlen(str) - 1;
+    int length = strlen(str);
+    int i;
     char temp;
-    while (start < end)
+    for (i = 0; i < length / 2; i++)
     {
-        temp = *start;
-        *start = *end;
-        *end = temp;
-        start++;
-        end--;
+        temp = str[i];
+        str[i] = str[length - i - 1];
+        str[length - i - 1] = temp;
     }
     return str;
 }
