@@ -298,7 +298,7 @@ int findIndex(int const arr[], int n, int key)
     return right; // return the last valid position
 }
 
-int occFunc(char ch, int pos,  Params const *params)
+int occFunc(char ch, int pos, Params const *params)
 {
     int nearest = findIndex(params->positions, params->checkpointCount, pos);
     int posBWT = params->positions[nearest];
@@ -306,27 +306,37 @@ int occFunc(char ch, int pos,  Params const *params)
     int occ[ALPHABET_SIZE] = {0};
     if (nearest)
     {
-        fseek(params->index,
-              (params->checkpointCount + QUICK_TABLE_LEN * 3) * sizeof(int) + (nearest - 1) * PIECE_LENGTH, SEEK_SET);
-        unsigned long readN = fread(&occ, sizeof(int), ALPHABET_SIZE, params->index);
-        if (readN != ALPHABET_SIZE)
+        // fseek(params->index,
+            //   (params->checkpointCount + QUICK_TABLE_LEN * 3) * sizeof(int) + (nearest - 1) * PIECE_LENGTH, SEEK_SET);
+        // long readN = fread(&occ, sizeof(int), ALPHABET_SIZE, params->index);
+        // if (readN != ALPHABET_SIZE)
+        // {
+        //     fprintf(stderr, "Failed to read occ from index file\n");
+        //     exit(EXIT_FAILURE);
+        // }
+        long start = (params->checkpointCount + QUICK_TABLE_LEN * 3) * sizeof(int) + (nearest - 1) * PIECE_LENGTH;
+        int readN = params->idxSize - start < ALPHABET_SIZE * sizeof(int) ? params->idxSize - start : ALPHABET_SIZE * sizeof(int);
+        if (readN != ALPHABET_SIZE * sizeof(int))
         {
             fprintf(stderr, "Failed to read occ from index file\n");
             exit(EXIT_FAILURE);
         }
+        memcpy(&occ, params->indexData + start, ALPHABET_SIZE * sizeof(int));
     }
     if (posBWT == pos)
     {
         return occ[map(ch)];
     }
-    fseek(params->rlb, posRLB, SEEK_SET);
+    // fseek(params->rlb, posRLB, SEEK_SET);
     unsigned char buffer[CHECKPOINT_LENGTH + 4];
-    short bytesRead = (short)fread(buffer, 1, CHECKPOINT_LENGTH + 4, params->rlb);
+    // int bytesRead = fread(buffer, 1, CHECKPOINT_LENGTH + 4, params->rlb);
+    int bytesRead = params->rlbSize - posRLB < CHECKPOINT_LENGTH + 4 ? params->rlbSize - posRLB : CHECKPOINT_LENGTH + 4;
     if (bytesRead <= 0)
     {
         fprintf(stderr, "Failed to read from rlb file\n");
         exit(EXIT_FAILURE);
     }
+    memcpy(buffer, params->rlbData + posRLB, bytesRead);
 
     short i = 0;
     while (bytesRead > i && MSB(buffer[i]))
@@ -419,13 +429,15 @@ char readCP(struct checkpoint *cp, int nearest, Params const *params)
     }
     if (params->checkpointCount)
     {
-        fseek(params->index, readPos, SEEK_SET);
-        unsigned long readN = fread(cpPtr, sizeof(int), readLength, params->index);
-        if (readN != readLength)
+        // fseek(params->index, readPos, SEEK_SET);
+        // long readN = fread(cpPtr, sizeof(int), readLength, params->index);
+        long readN = params->idxSize - readPos < readLength * sizeof(int) ? params->idxSize - readPos : readLength * sizeof(int);
+        if (readN != readLength * sizeof(int))
         {
             fprintf(stderr, "Failed to read checkpoint from index file\n");
             exit(EXIT_FAILURE);
         }
+        memcpy(cpPtr, params->indexData + readPos, readN);
     }
     return params->checkpointCount && nearest < params->checkpointCount;
 }
@@ -455,15 +467,16 @@ char decode(int pos, int *rank, int *count, int *startPos, Params const *params)
         }
     }
 
-    fseek(params->rlb, posRLB, SEEK_SET);
-
+    // fseek(params->rlb, posRLB, SEEK_SET);
     unsigned char buffer[CHECKPOINT_LENGTH + 4];
-    short bytesRead = (short)fread(buffer, 1, CHECKPOINT_LENGTH + 4, params->rlb);
+    // short bytesRead = (short)fread(buffer, 1, CHECKPOINT_LENGTH + 4, params->rlb);
+    short bytesRead = params->rlbSize - posRLB < CHECKPOINT_LENGTH + 4 ? params->rlbSize - posRLB : CHECKPOINT_LENGTH + 4;
     if (bytesRead <= 0)
     {
         fprintf(stderr, "Failed to read from rlb file\n");
         exit(EXIT_FAILURE);
     }
+    memcpy(buffer, params->rlbData + posRLB, bytesRead);
 
     short i = 0;
     while (bytesRead > i && MSB(buffer[i]))

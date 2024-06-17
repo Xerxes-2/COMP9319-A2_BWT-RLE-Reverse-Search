@@ -4,8 +4,10 @@
 #define PARAMS_STRUCT
 typedef struct
 {
-    FILE *rlb;
-    FILE *index;
+    char *rlbData;
+    int rlbSize;
+    char *indexData;
+    int idxSize;
     int checkpointCount;
     const int *cTable;
     const int *positions;

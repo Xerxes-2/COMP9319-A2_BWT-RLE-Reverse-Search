@@ -5,7 +5,7 @@
 #include <stdio.h>
 #include "index.h"
 
-char *reverse(char *str);
+char *reverse(char str[]);
 void search(char const *pattern, Params const *params);
 void rebuildRec(char *record, int pos, Params const *params);
 unsigned int findId(int pos, Params const *params);

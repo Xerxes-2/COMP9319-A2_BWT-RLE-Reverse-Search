@@ -3,6 +3,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <sys/stat.h>
+#include <sys/mman.h>
 
 int main(int argc, char *argv[])
 {
@@ -88,12 +89,29 @@ int main(int argc, char *argv[])
 
     int *cTable = generateCTable(rlb, index, checkpointCount);
 
-    Params params = {rlb, index, checkpointCount, cTable, positions};
+    // mmap rlb file
+    char *rlbData = mmap(NULL, rlbSize, PROT_READ, MAP_PRIVATE, fileno(rlb), 0);
+    char *idxData = NULL;
+    int idxSize = 0;
+    if (checkpointCount > 0)
+    {
+        struct stat st;
+        stat(argv[2], &st);
+        idxSize = (int)st.st_size;
+        idxData = mmap(NULL, idxSize, PROT_READ, MAP_PRIVATE, fileno(index), 0);
+    }
+
+    Params params = {rlbData, rlbSize, idxData, idxSize, checkpointCount, cTable, positions};
 
     search(pattern, &params);
 
     free(positions);
     free(cTable);
+    munmap(rlbData, rlbSize);
+    if (checkpointCount > 0 && idxData)
+    {
+        munmap(idxData, idxSize);
+    }
     fclose(rlb);
     if (checkpointCount > 0 && index)
     {
