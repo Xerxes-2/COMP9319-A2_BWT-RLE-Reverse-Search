@@ -87,10 +87,10 @@ void findMinId(Params const *Params)
 int searchID(unsigned int id, Params const *params)
 {
     static char pattern[16];
-    sprintf(pattern, "[%d]", id);
+    sprintf(pattern, "[%d", id);
     reverse(pattern);
-    int index = params->cTable[']' - 39];
-    for (int i = 1; i < strlen(pattern); i++)
+    int index = params->cTable[']' - 29];
+    for (int i = 0; i < strlen(pattern); i++)
     {
         int occ = occFunc(pattern[i], index, params);
         index = nthChar(occ, pattern[i], params->cTable);

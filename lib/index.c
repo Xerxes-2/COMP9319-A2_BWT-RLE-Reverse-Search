@@ -298,7 +298,7 @@ int findIndex(int const arr[], int n, int key)
     return right; // return the last valid position
 }
 
-int occFunc(char ch, int pos,  Params const *params)
+int occFunc(char ch, int pos, Params const *params)
 {
     int nearest = findIndex(params->positions, params->checkpointCount, pos);
     int posBWT = params->positions[nearest];
@@ -358,15 +358,8 @@ int occFunc(char ch, int pos,  Params const *params)
             countLen = 0;
         }
     }
-    if (pos == posBWT)
-    {
-        return occ[map(ch)];
-    }
-    if (countLen)
-    {
-        return occ[map(ch)] + (pos - posBWT) * (rlChar == ch);
-    }
-    return occ[map(ch)] + (rlChar == ch);
+
+    return occ[map(ch)] + (pos - posBWT) * (rlChar == ch);
 }
 
 struct checkpoint
