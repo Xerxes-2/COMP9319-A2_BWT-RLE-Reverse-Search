@@ -25,102 +25,6 @@ unsigned int rebuildCount(unsigned int curCount, unsigned char newByte, unsigned
     return curCount + 2 * (countLen == 0) + (newByteCount << (countLen * 7));
 }
 
-struct RunLength
-{
-    unsigned char ch;
-    unsigned int count;
-    unsigned int pos;
-    unsigned int rank;
-};
-
-int compareRL(const void *a, const void *b)
-{
-    const struct RunLength *elemA = (const struct RunLength *)a;
-    const struct RunLength *elemB = (const struct RunLength *)b;
-    return elemA->pos - elemB->pos; // reverse order to create a min-heap
-}
-
-unsigned long encodeRL(struct RunLength const *rl)
-{
-    // count and pos is at most 28 bit
-    return ((unsigned long)rl->ch << 56) | ((unsigned long)rl->count << 28) | rl->pos;
-}
-
-struct RunLength decodeRL(unsigned long rl)
-{
-    struct RunLength decoded;
-    decoded.ch = rl >> 56;
-    decoded.count = (rl >> 28) & 0xFFFFFFF;
-    decoded.pos = rl & 0xFFFFFFF;
-    return decoded;
-}
-
-struct PQueue
-{
-    struct RunLength data[QUICK_TABLE_LEN];
-    int size;
-};
-
-void swap(struct RunLength *x, struct RunLength *y)
-{
-    struct RunLength temp = *x;
-    *x = *y;
-    *y = temp;
-}
-
-void insert(struct PQueue *pq, struct RunLength rl)
-{
-    if (pq->size < QUICK_TABLE_LEN)
-    {
-        pq->data[pq->size] = rl;
-        pq->size++;
-        int i = pq->size - 1;
-        while (i > 0)
-        {
-            int parent = (i - 1) / 2;
-            if (pq->data[i].count < pq->data[parent].count)
-            {
-                swap(&pq->data[i], &pq->data[parent]);
-                i = parent;
-            }
-            else
-            {
-                break;
-            }
-        }
-        return;
-    }
-
-    if (rl.count > pq->data[0].count)
-    {
-        pq->data[0] = rl;
-        int i = 0;
-        while (i < QUICK_TABLE_LEN)
-        {
-            int left = 2 * i + 1;
-            int right = 2 * i + 2;
-            int smallest = i;
-            if (left < QUICK_TABLE_LEN && pq->data[left].count < pq->data[smallest].count)
-            {
-                smallest = left;
-            }
-            if (right < QUICK_TABLE_LEN && pq->data[right].count < pq->data[smallest].count)
-            {
-                smallest = right;
-            }
-            if (smallest != i)
-            {
-                swap(&pq->data[i], &pq->data[smallest]);
-                i = smallest;
-            }
-            else
-            {
-                break;
-            }
-        }
-    }
-}
-
 int *generateIndex(FILE *rlb, FILE *index, int checkpointCount)
 {
     if (checkpointCount == 0)
@@ -160,7 +64,6 @@ int *generateIndex(FILE *rlb, FILE *index, int checkpointCount)
         unsigned char rlChar = buffer[i];
         unsigned int rlCount = 1;
         unsigned char countLen = 0;
-        struct PQueue pq = {.size = 0};
         for (i++; i < CHECKPOINT_LENGTH; i++)
         {
             if (MSB(buffer[i]))
@@ -170,8 +73,6 @@ int *generateIndex(FILE *rlb, FILE *index, int checkpointCount)
             }
             else
             {
-                struct RunLength rl = {rlChar, rlCount, curPosBWT, occ[map(rlChar)]};
-                insert(&pq, rl);
                 occ[map(rlChar)] += rlCount;
                 curPosBWT += rlCount;
                 rlChar = buffer[i];
@@ -191,20 +92,13 @@ int *generateIndex(FILE *rlb, FILE *index, int checkpointCount)
         curPosBWT += rlCount;
 
         writePositions[writeCpCount] = curPosBWT;
-        qsort(pq.data, pq.size, sizeof(struct RunLength), compareRL);
-        unsigned int quickTable[QUICK_TABLE_LEN * 3];
-        for (int j = 0; j < QUICK_TABLE_LEN; j++)
-        {
-            unsigned long rl = encodeRL(&pq.data[j]);
-            quickTable[j * 3] = rl >> 32;
-            quickTable[j * 3 + 1] = (unsigned int)rl;
-            quickTable[j * 3 + 2] = pq.data[j].rank;
-        }
-        fwrite(quickTable, sizeof(unsigned int), QUICK_TABLE_LEN * 3, index);
         fwrite(occ, sizeof(int), ALPHABET_SIZE, index);
         writeCpCount++;
 
-        fseek(rlb, -4, SEEK_CUR); // go back for overhead before
+        if (bytesRead > CHECKPOINT_LENGTH)
+        {
+            fseek(rlb, CHECKPOINT_LENGTH - bytesRead, SEEK_CUR); // go back for overhead before
+        }
         bytesRead = (int)fread(buffer, 1, CHECKPOINT_LENGTH + 4, rlb);
     }
 
@@ -307,7 +201,7 @@ int occFunc(char ch, int pos, Params const *params)
     if (nearest)
     {
         fseek(params->index,
-              (params->checkpointCount + QUICK_TABLE_LEN * 3) * sizeof(int) + (nearest - 1) * PIECE_LENGTH, SEEK_SET);
+              params->checkpointCount * sizeof(int) + (nearest - 1) * PIECE_LENGTH, SEEK_SET);
         unsigned long readN = fread(&occ, sizeof(int), ALPHABET_SIZE, params->index);
         if (readN != ALPHABET_SIZE)
         {
@@ -365,53 +259,19 @@ int occFunc(char ch, int pos, Params const *params)
 struct checkpoint
 {
     int occTable[ALPHABET_SIZE];
-    unsigned int quickTable[QUICK_TABLE_LEN * 3];
 };
 
-int findRL(unsigned int const arr[], int key)
-{
-    int left = 0;
-    int right = QUICK_TABLE_LEN - 1;
-
-    while (left <= right)
-    {
-        int mid = left + (right - left) / 2;
-
-        if ((arr[3 * mid + 1] & 0xFFFFFFF) <= key)
-            left = mid + 1;
-        else
-            right = mid - 1;
-    }
-
-    return right; // return the last valid position
-}
-
-char readCP(struct checkpoint *cp, int nearest, Params const *params)
+void readCP(struct checkpoint *cp, int nearest, Params const *params)
 {
     long readPos;
     long readLength;
     void *cpPtr;
-    if (nearest > 0 && nearest < params->checkpointCount)
+    if (params->checkpointCount && nearest)
     {
-        readPos = (params->checkpointCount + QUICK_TABLE_LEN * 3) * sizeof(int) + (nearest - 1) * PIECE_LENGTH;
-        readLength = ALPHABET_SIZE + QUICK_TABLE_LEN * 3;
-        cpPtr = cp;
-    }
-    else if (nearest == params->checkpointCount && nearest)
-    {
-        readPos = (params->checkpointCount + QUICK_TABLE_LEN * 3) * sizeof(int) +
-                  (params->checkpointCount - 1) * PIECE_LENGTH;
+        readPos = params->checkpointCount * sizeof(int) +
+                  (nearest - 1) * PIECE_LENGTH;
         readLength = ALPHABET_SIZE;
         cpPtr = &cp->occTable;
-    }
-    else if (params->checkpointCount)
-    {
-        readPos = params->checkpointCount * sizeof(int);
-        readLength = QUICK_TABLE_LEN * 3;
-        cpPtr = &cp->quickTable;
-    }
-    if (params->checkpointCount)
-    {
         fseek(params->index, readPos, SEEK_SET);
         unsigned long readN = fread(cpPtr, sizeof(int), readLength, params->index);
         if (readN != readLength)
@@ -420,7 +280,6 @@ char readCP(struct checkpoint *cp, int nearest, Params const *params)
             exit(EXIT_FAILURE);
         }
     }
-    return params->checkpointCount && nearest < params->checkpointCount;
 }
 
 char decode(int pos, int *rank, int *count, int *startPos, Params const *params)
@@ -431,27 +290,16 @@ char decode(int pos, int *rank, int *count, int *startPos, Params const *params)
     int posRLB = nearest * CHECKPOINT_LENGTH;
 
     struct checkpoint cp = {0};
-    if (readCP(&cp, nearest, params))
-    {
-        int rlIndex = findRL(cp.quickTable, pos);
-        if (rlIndex >= 0)
-        {
-            unsigned long rl = (((unsigned long)cp.quickTable[rlIndex * 3]) << 32) | cp.quickTable[rlIndex * 3 + 1];
-            struct RunLength decoded = decodeRL(rl);
-            if (decoded.pos <= pos && decoded.pos + decoded.count > pos)
-            {
-                *rank = cp.quickTable[rlIndex * 3 + 2] + (pos - decoded.pos);
-                *count = decoded.count;
-                *startPos = decoded.pos;
-                return decoded.ch;
-            }
-        }
-    }
+    readCP(&cp, nearest, params);
 
     fseek(params->rlb, posRLB, SEEK_SET);
-
+    int buffer_len = pos - posBWT + 9;
+    if (buffer_len > CHECKPOINT_LENGTH + 4)
+    {
+        buffer_len = CHECKPOINT_LENGTH + 4;
+    }
     unsigned char buffer[CHECKPOINT_LENGTH + 4];
-    short bytesRead = (short)fread(buffer, 1, CHECKPOINT_LENGTH + 4, params->rlb);
+    short bytesRead = (short)fread(buffer, 1, buffer_len, params->rlb);
     if (bytesRead <= 0)
     {
         fprintf(stderr, "Failed to read from rlb file\n");

@@ -13,8 +13,7 @@ typedef struct
 #endif
 
 #define ALPHABET_SIZE 98
-#define QUICK_TABLE_LEN 8
-#define PIECE_LENGTH (ALPHABET_SIZE * 4 + QUICK_TABLE_LEN * 12)
+#define PIECE_LENGTH (ALPHABET_SIZE * 4)
 #define CHECKPOINT_LENGTH (PIECE_LENGTH + 4)
 unsigned char map(char ch);
 int *generateIndex(FILE *rlb, FILE *index, int checkpointCount);
